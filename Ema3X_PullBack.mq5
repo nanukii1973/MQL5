@@ -2,21 +2,25 @@
 
 CTrade iTrade;
 
-input int                  FastEMA=9; 
+input int                  FastEMA=10; 
 input int                  MidEMA=13;
-input int                  SlowEMA=29;
-input int                  TrendEMA=100;
-input int                  AtrPreiod=13;
+input int                  SlowEMA=26;
+input int                  TrendEMA=150;
+input int                  AtrPreiod=20;
 input double               StopX=1.0;
-input double               TakeX=0.9;
-input int         TimeStart=1; 
-input int        TimeEnd=24;
+input double               TakeX=1.5;
+input int         TimeStart=8; 
+input int        TimeEnd=22;
+input double     OpenFill=0.5;
 
-//Optimize 1H, 4H EURUSDm lookGood// 
+//Optimize 15m EURUSDm lookGood//
+//***เพิ่มตัวกรองเงื่อนไขการเปิดOrder***//
 //----------------------------------------------------//
 //double StopLevel=NormalizeDouble((SymbolInfoInteger(_Symbol,SYMBOL_TRADE_STOPS_LEVEL)*_Point),_Digits);
 
 #define  OBJ_NAME "time_left_label"
+
+
 string Signal="";
 double EmaFastArray[] ,EmaSlowArray[], EmaMidArray[], EmaTrendArray[],
        AtrArray[], HighArray[], LowArray[], OpenArray[], CloseArray[];
@@ -70,91 +74,109 @@ void OnTick()
          {
          
          //int Bar=Bars(_Symbol,PERIOD_CURRENT);         
+            double u01, u02, s01, s02;
+            u01=EmaFastArray[0]-EmaSlowArray[0];
+            u02=EmaFastArray[2]-EmaSlowArray[2];
+            s01=EmaSlowArray[0]-EmaFastArray[0];
+            s02=EmaSlowArray[2]-EmaFastArray[2];
+            
+            
+            
             
            if(barCheck1!=Bar)
               {      
-                if(EmaFastArray[1]>EmaMidArray[1] && EmaMidArray[1]>EmaSlowArray[1] && EmaFastArray[1]>EmaTrendArray[1])
-                   if(HighArray[2]>EmaFastArray[2] && CloseArray[1]<EmaFastArray[1])// 
+                if(EmaFastArray[1]>EmaMidArray[1] && EmaMidArray[1]>EmaSlowArray[1] && EmaFastArray[1]>EmaTrendArray[1]
+                    && EmaFastArray[0]>EmaMidArray[0] && EmaMidArray[0]>EmaSlowArray[0] && u01>=u02*OpenFill)
+                  {
+                   if(CloseArray[2]>EmaFastArray[2] && CloseArray[1]<EmaFastArray[1])// 
                      {
                        Signal="BUY";
                     //Comment("************************BUY**************************");           
                      }
-                 } 
-               if(EmaFastArray[1]<EmaMidArray[1] && EmaMidArray[1]<EmaSlowArray[1] && EmaFastArray[1]<EmaTrendArray[1])
+                  } 
+               else if(EmaFastArray[1]<EmaMidArray[1] && EmaMidArray[1]<EmaSlowArray[1] && EmaFastArray[1]<EmaTrendArray[1]  
+                  && EmaFastArray[0]<EmaMidArray[0] && EmaMidArray[0]<EmaSlowArray[0] && s01>=s02*OpenFill)
                   {
-                    if(LowArray[2]<EmaFastArray[2] && CloseArray[1]>EmaFastArray[1])// 
+                    if(CloseArray[2]<EmaFastArray[2] && CloseArray[1]>EmaFastArray[1])// 
                       {
                        Signal="SELL";
                        //Comment("************************SELL**************************");
                       }
                   } 
+                  else
+                    {
+                     Signal="Waiting Signal...!!!";
+                    }
                     barCheck1=Bar;                  
               }
         
-        
+        }
       //--------------------------------------------------------------------------------------------//
       if(Signal=="BUY"&& PositionsTotal()<1)
         {
-         ulong ticket=OrderGetTicket(0);
-         string TypeOrder=EnumToString(ENUM_ORDER_TYPE(OrderGetInteger(ORDER_TYPE)));
-         double SL=NormalizeDouble((LowArray[1]-AtrArray[1]),_Digits);
-         double TP=NormalizeDouble(Highest5Back+(((Highest5Back-(LowArray[1]*StopX))+AtrArray[1])*TakeX),_Digits);
+         
+         int spred=SymbolInfoInteger(_Symbol,SYMBOL_SPREAD);         
+         
+         double SL=NormalizeDouble((LowArray[1]-AtrArray[1]),_Digits)+(spred*_Point);
+         double TP=NormalizeDouble(Highest5Back+(((Highest5Back-(LowArray[1]*StopX))+AtrArray[1])*TakeX),_Digits)+(spred*_Point);
+
          int Total=OrdersTotal();
          //int barCheck=0;        
          if(barCheck2!=Bar)
           //(TypeOrder==ORDER_TYPE_SELL_STOP)
-            {                       
-                 if(TypeOrder==ORDER_TYPE_SELL_STOP)
-                    {
-                      iTrade.OrderDelete(ticket);   
-                    }
-                  if(TypeOrder==ORDER_TYPE_BUY_STOP)
-                    {
-                      iTrade.OrderDelete(ticket);
-                      iTrade.BuyStop(0.01,Highest5Back,NULL,SL,TP,ORDER_TIME_DAY);   
-                    }
-                   if(Total==0)
-                     {
-                       iTrade.BuyStop(0.01,Highest5Back,NULL,SL,TP,ORDER_TIME_DAY);
-                     }  
+            {
+            if(Total!=0)
+              {
+               ulong ticket=OrderGetTicket(0);
+               string TypeOrder=(OrderGetInteger(ORDER_TYPE));
 
+               for(int i=0;i<Total;i++)
+                  {
+                  if((ticket=OrderGetTicket(i))>0)
+                    {
+                     if(TypeOrder==ORDER_TYPE_BUY_STOP) iTrade.OrderDelete(ticket);
+                     if(TypeOrder==ORDER_TYPE_SELL_STOP) iTrade.OrderDelete(ticket);
+                     //if(TypeOrder==ORDER_TYPE_BUY_STOP) iTrade.OrderModify(ticket,Highest5Back+(spred*_Point),SL,TP,ORDER_TIME_DAY,0,0);
+                    }                      
+                  }                
+              }
+              iTrade.BuyStop(0.01,Highest5Back+(spred*_Point),NULL,SL,TP,ORDER_TIME_DAY);              
               barCheck2=Bar;              
             }
-        //Signal="Order Buy Now";
+        Signal="Order Buy Now";
         } 
       //--------------------------------------------------------------------------------------------//  
       if(Signal=="SELL" && PositionsTotal()<1)  
         {
-         ulong ticket=OrderGetTicket(0);
-         string TypeOrder=EnumToString(ENUM_ORDER_TYPE(OrderGetInteger(ORDER_TYPE)));
-         double SL=NormalizeDouble((HighArray[1]+AtrArray[1]),_Digits);
-         double TP=NormalizeDouble(Lowest5Back-((((AtrArray[1]*StopX)+HighArray[1])-Lowest5Back)*TakeX),_Digits);                      
+         int spred=SymbolInfoInteger(_Symbol,SYMBOL_SPREAD);  
+         double SL=NormalizeDouble((HighArray[1]+AtrArray[1]),_Digits)-(spred*_Point);
+         double TP=NormalizeDouble(Lowest5Back-((((AtrArray[1]*StopX)+HighArray[1])-Lowest5Back)*TakeX),_Digits)-(spred*_Point);    
          int Total=OrdersTotal();
          if(barCheck3!=Bar)
           //
             {
-                  if(TypeOrder==ORDER_TYPE_BUY_STOP)
+             if(Total!=0)
+              {
+              ulong ticket=OrderGetTicket(0);
+              string TypeOrder=(OrderGetInteger(ORDER_TYPE));                    
+              
+               for(int i=0;i<Total;i++)
+                  {
+                  if((ticket=OrderGetTicket(i))>0)
                     {
-                      iTrade.OrderDelete(ticket);
-                    }
-                  if(TypeOrder==ORDER_TYPE_SELL_STOP)
-                    {
-                      iTrade.OrderDelete(ticket); 
-                      iTrade.SellStop(0.01,Lowest5Back,NULL,SL,TP,ORDER_TIME_DAY);
-
-                    }
-                  if(Total==0)
-                    {
-                      iTrade.SellStop(0.01,Lowest5Back,NULL,SL,TP,ORDER_TIME_DAY);
-                    }                 
-                  
+                     if(TypeOrder==ORDER_TYPE_BUY_STOP) iTrade.OrderDelete(ticket);                     
+                     if(TypeOrder==ORDER_TYPE_SELL_STOP) iTrade.OrderDelete(ticket);
+                     //if(TypeOrder==ORDER_TYPE_SELL_STOP) iTrade.OrderModify(ticket,Lowest5Back-(spred*_Point),SL,TP,ORDER_TIME_DAY,0,0);
+                    }                         
+                  } 
+              }              
+                iTrade.SellStop(0.01,Lowest5Back-(spred*_Point),NULL,SL,TP,ORDER_TIME_DAY);                            
                 barCheck3=Bar;                        
             }
-              Signal="Order Sell Now";
-         }                 
-          Comment(Signal);
-          
+             Signal="Order Sell Now";
+         }                         
           //StopLoss8x5(); 
+          Comment(Signal);
   }
 
 //--------------------------------------------------------------------------------------------//   
@@ -227,7 +249,21 @@ void addLabel(bool timeToTrade)
          ObjectSetInteger(0,OBJ_NAME,OBJPROP_ANCHOR,ANCHOR_RIGHT_UPPER);
          ObjectSetInteger(0,OBJ_NAME,OBJPROP_CORNER,CORNER_RIGHT_UPPER);
          ObjectSetInteger(0,OBJ_NAME,OBJPROP_XDISTANCE,50);
-      }    
+      }
+      if(Signal!=0)
+        {
+         
+        
+      ObjectCreate(0,"Text01",OBJ_LABEL,0,0,0);
+         ObjectSetString(0,"Text01",OBJPROP_TEXT,Signal);
+         ObjectSetString(0,"Text01",OBJPROP_FONT,"Hack");
+         ObjectSetInteger(0,"Text01",OBJPROP_COLOR,clrOrange);
+         ObjectSetInteger(0,"Text01",OBJPROP_SELECTABLE,false);
+         ObjectSetInteger(0,"Text01",OBJPROP_FONTSIZE,12);
+         ObjectSetInteger(0,"Text01",OBJPROP_ANCHOR,ANCHOR_RIGHT_UPPER);
+         ObjectSetInteger(0,"Text01",OBJPROP_CORNER,CORNER_RIGHT_UPPER);
+         ObjectSetInteger(0,"Text01",OBJPROP_XDISTANCE,300);            
+         }
   }
   
 bool timeToTrade()
