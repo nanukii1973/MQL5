@@ -4,6 +4,14 @@
 #include <Indicators\TimeSeries.mqh>
 #include <Math\Stat\Normal.mqh>
 #include <Controls\Button.mqh>
+#include <Controls\Dialog.mqh>
+#include <Controls\WndObj.mqh>
+#include <ChartObjects\ChartObjectsLines.mqh>
+
+CChartObjectTrend TrendLine;
+CWndObj         Cwobj1;
+CRect           Cr1;
+CAppDialog   Dialog1;
 CiHigh          High;
 CiOpen          Open;
 CiClose        Close;
@@ -18,6 +26,8 @@ CButton  B1, B2, B3;
 int ZBar;
 string bottonClick="";
 string lineH="";
+double HighArray[], LowArray[];
+int barCheck1;
 //----------------------------------//
 int OnInit()
   {
@@ -27,6 +37,7 @@ int OnInit()
     RectLabelCreate(0,"Rect",0,10,80,200,300,clrBlack,BORDER_FLAT,CORNER_LEFT_UPPER,clrLimeGreen,STYLE_SOLID,0,0,0,1,0);
     RectLabelCreate(0,"Rect1",0,15,130,190,240,clrNONE,BORDER_FLAT,CORNER_LEFT_UPPER,clrGray,STYLE_SOLID,1,0,0,1,0);
     RectLabelCreate(0,"Rect2",0,20,185,180,50,clrNONE,BORDER_FLAT,CORNER_LEFT_UPPER,clrGray,STYLE_SOLID,1,0,0,1,0);
+    RectLabelCreate(0,"Rect3",0,20,265,180,90,clrNONE,BORDER_FLAT,CORNER_LEFT_UPPER,clrGray,STYLE_SOLID,1,0,0,1,0);
    //BitmapCreate(0,"PNG",0,0,0,"",10,10,0,0,clrRed,STYLE_SOLID,1,0,0,0,0);
    //BitmapSetImage(0,"PNG","\\Experts\\Nanakii\\JPG.bmp");
     LabelCreate(0,"Label1",0,30,90,CORNER_LEFT_UPPER,"BID","Arial Bold",12,clrLimeGreen,0,0,0,0,ALIGN_CENTER);
@@ -55,6 +66,12 @@ int OnInit()
     LabelCreate(0,"Label8",0,30,240,CORNER_LEFT_UPPER,"Reward Ratio","Arial Bold",12,clrWhiteSmoke,0,0,0,0,ALIGN_CENTER);    
     LabelCreate(0,"Text8",0,180,240,CORNER_LEFT_UPPER,"%","Arial Bold",12,clrWhiteSmoke,0,0,0,0,ALIGN_CENTER);
     
+    LabelCreate(0,"Label9",0,25,275,CORNER_LEFT_UPPER,"100","Arial Bold",16,clrWhiteSmoke,0,0,0,0,ALIGN_CENTER);  
+    LabelCreate(0,"Label10",0,40,300,CORNER_LEFT_UPPER,"Balance","Arial Bold",10,clrWhiteSmoke,0,0,0,0,ALIGN_CENTER);       
+
+    LabelCreate(0,"Label11",0,145,273,CORNER_LEFT_UPPER,"10","Arial Bold",17,clrWhiteSmoke,0,0,0,0,ALIGN_CENTER);  
+    LabelCreate(0,"Label12",0,150,300,CORNER_LEFT_UPPER,"Profit","Arial Bold",10,clrWhiteSmoke,0,0,0,0,ALIGN_CENTER);       
+        
     B1.Create(0,"Button_buy",0,0,0,70,40); B1.Shift(20,320);
     //B1.Create(0,"",0,)
     B1.Text("BUY"); B1.Font("Arial Bold"); B1.FontSize(12); B1.Color(clrLimeGreen); B1.ColorBackground(clrDimGray);
@@ -69,8 +86,12 @@ int OnInit()
     //ButtonCreate(0,"Button_buy",0,20,325,80,40,CORNER_LEFT_UPPER,"BUY","Arial Bold",12,clrLimeGreen,clrBlack,clrNONE);
     //ButtonCreate(0,"Button_sell",0,120,325,80,40,CORNER_LEFT_UPPER,"SELL","Arial Bold",12,clrOrangeRed,clrBlack,clrNONE);
     EditCreate(0,"Edit1",0,150,240,30,18,"1.5","Arial Bold",11,ALIGN_LEFT,0,CORNER_LEFT_UPPER,clrWhiteSmoke,clrNONE);
+    
+    
     //------------------------------------------------------------------------------------------------------------//
         
+      TrendCreate(0,"TrandLine1",0,0,0,0,0,clrOrange,STYLE_SOLID,1,0,0,1,0);
+      TrendCreate(0,"TrandLine2",0,0,0,0,0,clrPeru,STYLE_SOLID,1,0,0,1,0);
     //------------------------------------------------------------------------------------------------------------//
    High.Create(_Symbol,PERIOD_CURRENT);
    Open.Create(_Symbol,PERIOD_CURRENT);
@@ -111,6 +132,17 @@ void OnTick()
       Open.Refresh();
       Close.Refresh();
       Low.Refresh();  
+   double balance=AccountInfoDouble(ACCOUNT_BALANCE);
+    double profit=AccountInfoDouble(ACCOUNT_PROFIT);
+   
+   ObjectSetString(0,"Label9",OBJPROP_TEXT,balance);
+   ObjectSetString(0,"Label11",OBJPROP_TEXT,profit);
+   if(profit>=0)
+     {
+      ObjectSetInteger(0,"Label11",OBJPROP_COLOR,clrRed);
+     }
+   
+      
    double Bid=NormalizeDouble(SymbolInfoDouble(_Symbol,SYMBOL_BID),_Digits);
    double Ask=NormalizeDouble(SymbolInfoDouble(_Symbol,SYMBOL_ASK),_Digits);
    //float spred=SymbolInfoInteger(_Symbol,SYMBOL_SPREAD)*_Point;
@@ -130,11 +162,10 @@ void OnTick()
    
    double lineSL=(StringToDouble(ObjectGetString(0,"Text_SL",OBJPROP_TEXT,0)))*_Point;
    double lineTP=(StringToDouble(ObjectGetString(0,"Text_TP",OBJPROP_TEXT,0)))*_Point;
+//--------------------------------------------------------//
 
    if(MQLInfoInteger(MQL_VISUAL_MODE)==true)
      {
-      
-     
     
    if(FileIsExist("buy.txt",FILE_COMMON))
      {
@@ -185,7 +216,7 @@ void OnTick()
      
    }
 
- 
+  
  
    if(bottonClick=="buyClick")
      {
@@ -197,21 +228,71 @@ void OnTick()
         HLineMove(0,"Hline_SL",Bid+lineSL);
         HLineMove(0,"Hline_TP",Bid-lineTP);   
      }
-/*
-   if(ObjectGetInteger(0,"Button1",OBJPROP_STATE)==1)
+     
+  if(MQLInfoInteger(MQL_VISUAL_MODE)==false)
      {
-      ObjectSetInteger(0,"Hline_SL",OBJPROP_COLOR,clrNONE);
-      ObjectSetInteger(0,"Hline_TP",OBJPROP_COLOR,clrNONE);
-      //ChartRedraw();
+          
+       if(ObjectGetInteger(0,"Button1",OBJPROP_STATE)==1)
+         {
+          ObjectSetInteger(0,"Hline_SL",OBJPROP_COLOR,clrNONE);
+          ObjectSetInteger(0,"Hline_TP",OBJPROP_COLOR,clrNONE);
+          //ChartRedraw();
+         }
+        if(ObjectGetInteger(0,"Button1",OBJPROP_STATE)==0)
+         {
+          ObjectSetInteger(0,"Hline_SL",OBJPROP_COLOR,clrOrangeRed);
+          ObjectSetInteger(0,"Hline_TP",OBJPROP_COLOR,clrLimeGreen);
+         }         
      }
-    if(ObjectGetInteger(0,"Button1",OBJPROP_STATE)==0)
-     {
-      ObjectSetInteger(0,"Hline_SL",OBJPROP_COLOR,clrOrangeRed);
-      ObjectSetInteger(0,"Hline_TP",OBJPROP_COLOR,clrLimeGreen);
-     } */
-  }
-//----------------------------------//
+     ArraySetAsSeries(HighArray,true);
+     ArraySetAsSeries(LowArray,true);
+     
+    // double HighDef=iHigh 
+      for(int i=0;i<12;i++)
+        {
+          //ArrayMinimum(Low.At)
+         //Bars()
+         //BarsCalculated()
+        }
+        iTime(_Symbol,PERIOD_CURRENT,5);
+   //   TrendPointChange(0,"TrandLine1",0,d2,p2); 
+    //  
+    
+    double highest1, lowest1, highest2, lowest2;
+    datetime datehigh1, dateLow1, datehigh2, dateLow2;
+    int lasthigh1, lasthigh2, lastLow1, lastLow2;
+    int periodTrend = 48;
+    int thisBar=iBars(_Symbol,PERIOD_CURRENT);
+    if(barCheck1!=thisBar)
+      {
+       
+      
+          lasthigh1 = iHighest(_Symbol,PERIOD_CURRENT,MODE_HIGH,periodTrend,1); 
+          datehigh1=iTime(_Symbol,PERIOD_CURRENT,lasthigh1);
+          highest1=iHigh(_Symbol,PERIOD_CURRENT,lasthigh1);
+          lasthigh2=iHighest(_Symbol,PERIOD_CURRENT,MODE_HIGH,periodTrend,periodTrend-1);
+          datehigh2=iTime(_Symbol,PERIOD_CURRENT,lasthigh2);
+          highest2=iHigh(_Symbol,PERIOD_CURRENT,lasthigh2);
 
+          lastLow1=iLowest(_Symbol,PERIOD_CURRENT,MODE_LOW,periodTrend,1);
+          dateLow1=iTime(_Symbol,PERIOD_CURRENT,lastLow1);
+          lowest1=iLow(_Symbol,PERIOD_CURRENT,lastLow1);
+          lastLow2=iLowest(_Symbol,PERIOD_CURRENT,MODE_LOW,periodTrend,periodTrend-1);
+          dateLow2=iTime(_Symbol,PERIOD_CURRENT,lastLow2);
+          lowest2=iLow(_Symbol,PERIOD_CURRENT,lastLow2);
+      
+      TrendPointChange(0,"TrandLine1",0,datehigh1,highest1);
+      TrendPointChange(0,"TrandLine1",1,datehigh2,highest2);
+      
+      TrendPointChange(0,"TrandLine2",0,dateLow1,lowest1);
+      TrendPointChange(0,"TrandLine2",1,dateLow2,lowest2);
+        
+        barCheck1= thisBar;
+     } printf(lasthigh1+" || "+thisBar);
+  }
+  
+//----------------------------------//
+    
 //----------------------------------//
 void OnChartEvent(const int id,const long& lparam,const double& dparam,const string& sparam)
   {
